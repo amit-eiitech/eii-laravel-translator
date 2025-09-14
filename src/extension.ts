@@ -41,8 +41,20 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      // Collect all Blade files and folders
-      const bladeFiles = glob.sync("**/*.blade.php", { cwd: workspaceRoot });
+      const isWindows = process.platform === "win32";
+      const separator = isWindows ? "\\" : "/";
+      const defaultDir = `resources${separator}views`;
+      const defaultDirPath = path.join(workspaceRoot, defaultDir);
+
+      // Collect all Blade files and folders under defaultDir, excluding vendor and node_modules
+      const bladeFiles = fs.existsSync(defaultDirPath)
+        ? glob
+            .sync("**/*.blade.php", {
+              cwd: defaultDirPath,
+              ignore: ["vendor/**", "node_modules/**"],
+            })
+            .map((f) => path.join(defaultDir, f).replace(/\//g, separator))
+        : [];
       const allFolders = [
         ...new Set(bladeFiles.map((file) => path.dirname(file))),
       ].sort();
@@ -60,7 +72,7 @@ export function activate(context: vscode.ExtensionContext) {
           isFolder: false,
         })),
         ...allFolders.map((folder) => ({
-          label: `${folder}/*`,
+          label: `${folder}${separator}*`,
           detail: "All Blade files in folder",
           path: `${folder}/*`,
           isFolder: true,
@@ -70,19 +82,21 @@ export function activate(context: vscode.ExtensionContext) {
       // Prompt for file or folder path with QuickPick
       const quickPick = vscode.window.createQuickPick<FileQuickPickItem>();
       quickPick.items = allItems;
-      quickPick.placeholder =
-        'Select a Blade file, folder with "/*", or "*" for all files';
+      quickPick.placeholder = `Select a Blade file, folder with "${separator}*", or "*" for all files (starting from ${defaultDir})`;
+      quickPick.value = `${defaultDir}${separator}`;
       quickPick.matchOnDescription = true;
       quickPick.matchOnDetail = true;
 
       // Filter items as user types
       quickPick.onDidChangeValue(() => {
-        const input = quickPick.value.toLowerCase();
+        const input = quickPick.value.toLowerCase().replace(/\\/g, "/");
         if (!input) {
           quickPick.items = allItems;
         } else {
-          quickPick.items = allItems.filter((item) =>
-            item.label.toLowerCase().includes(input)
+          quickPick.items = allItems.filter(
+            (item) =>
+              item.label.toLowerCase().replace(/\\/g, "/").includes(input) ||
+              item.label === "*"
           );
         }
       });
@@ -104,22 +118,31 @@ export function activate(context: vscode.ExtensionContext) {
 
       let files: string[] = [];
       if (selectedItem.path === "*") {
-        files = bladeFiles;
+        files = glob.sync("**/*.blade.php", {
+          cwd: workspaceRoot,
+          ignore: ["vendor/**", "node_modules/**"],
+        });
       } else if (selectedItem.isFolder) {
-        const dir = selectedItem.path.slice(0, -2); // Remove '/*'
+        const dir = selectedItem.path.slice(0, -2).replace(/\\/g, "/"); // Normalize to forward slashes
         const dirPath = path.join(workspaceRoot, dir);
         if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
           files = glob
-            .sync("**/*.blade.php", { cwd: dirPath })
+            .sync("**/*.blade.php", {
+              cwd: dirPath,
+              ignore: ["vendor/**", "node_modules/**"],
+            })
             .map((f) => path.join(dir, f));
         } else {
           vscode.window.showErrorMessage("Invalid folder path.");
           return;
         }
       } else {
-        const filePath = path.join(workspaceRoot, selectedItem.path);
+        const filePath = path.join(
+          workspaceRoot,
+          selectedItem.path.replace(/\\/g, "/")
+        );
         if (fs.existsSync(filePath) && filePath.endsWith(".blade.php")) {
-          files = [selectedItem.path];
+          files = [selectedItem.path.replace(/\\/g, "/")];
         } else {
           vscode.window.showErrorMessage("Invalid Blade file path.");
           return;
@@ -138,7 +161,10 @@ export function activate(context: vscode.ExtensionContext) {
       let newTranslations: Record<string, string> = {};
 
       for (const file of files) {
-        const content = fs.readFileSync(path.join(workspaceRoot, file), "utf8");
+        const content = fs.readFileSync(
+          path.join(workspaceRoot, file.replace(/\\/g, "/")),
+          "utf8"
+        );
         const matches = content.match(/__\(['"`](.*?)['"`]\)/g) || [];
         matches.forEach((m) => {
           const key = m.replace(/__\(['"`](.*?)['"`]\)/, "$1");
@@ -151,7 +177,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const langDir = path.join(workspaceRoot, "resources/lang");
+      const langDir = path.join(workspaceRoot, "resources", "lang");
       fs.mkdirSync(langDir, { recursive: true });
 
       // Load existing en.json
@@ -241,7 +267,9 @@ export function activate(context: vscode.ExtensionContext) {
         }
       );
 
-      vscode.window.showInformationMessage("Extracted and translated strings!");
+      vscode.window.showInformationMessage(
+        "✅ Extracted and translated strings!"
+      );
     }
   );
 
