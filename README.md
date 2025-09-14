@@ -1,71 +1,101 @@
-# laravel-locale-generator README
+Eii Laravel Translator
+Eii Laravel Translator is a Visual Studio Code extension designed to streamline the localization process for Laravel applications. It automatically extracts translatable strings from Blade files, generates locale JSON files, and translates them into multiple languages using Google Translate or DeepL APIs. With features like selective file processing, progress reporting, and preservation of manual translations, this extension simplifies multilingual Laravel development.
+Features
 
-This is the README for your extension "laravel-locale-generator". After writing up a brief description, we recommend including the following sections.
+Extract Translatable Strings: Automatically detects strings wrapped in __() functions in Blade files.
+Multi-Language Translation: Supports translation into multiple languages via Google Translate or DeepL APIs.
+Selective Processing: Process a single Blade file, a specific folder, or all Blade files in the project.
+Smart File Selection: Interactive QuickPick interface with autocompletion for selecting files or folders, starting from resources/views.
+Preserve Manual Edits: Merges new translations without overwriting existing ones, respecting manual changes.
+Progress Reporting: Displays a progress bar during extraction and translation.
+Rate Limit Handling: Configurable delay and retry logic to handle API rate limits.
+Cross-Platform: Supports both forward and backslash paths for seamless use on Windows and other platforms.
 
-## Features
+Installation
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+Open Visual Studio Code.
+Go to the Extensions view (Ctrl+Shift+X or Cmd+Shift+X on macOS).
+Search for Eii Laravel Translator.
+Click Install.
 
-For example if there is an image subfolder under your extension project workspace:
+Alternatively, install the .vsix file manually:
 
-\!\[feature X\]\(images/feature-x.png\)
+Download the .vsix file from the VS Code Marketplace or generate it using vsce package.
+In VS Code, go to the Extensions view, click the ... menu, and select Install from VSIX.
+Choose the .vsix file and install.
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+Usage
 
-## Requirements
+Configure Settings:
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+Open VS Code Settings (Ctrl+, or Cmd+, on macOS).
+Search for eiiLaravelTranslator and set:
+eiiLaravelTranslator.apiProvider: Choose google or deepl (default: deepl).
+eiiLaravelTranslator.apiKey: Enter your API key for the selected provider.
+eiiLaravelTranslator.delayMs: Set delay between API requests (default: 200 ms).
 
-## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+Example settings.json:{
+  "eiiLaravelTranslator.apiProvider": "deepl",
+  "eiiLaravelTranslator.apiKey": "your-api-key",
+  "eiiLaravelTranslator.delayMs": 200
+}
 
-For example:
 
-This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
 
-## Known Issues
+Run the Extension:
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+Open a Laravel project in VS Code.
+Press Ctrl+Shift+P (or Cmd+Shift+P on macOS) and select Extract and Translate Translations.
+In the QuickPick dropdown:
+Start typing from resources/views/ (or resources\views\ on Windows) to select a Blade file or folder.
+Choose * for all Blade files or a folder with /* (e.g., resources/views/mail/*).
 
-## Release Notes
 
-Users appreciate release notes as you update your extension.
+Enter target languages (e.g., ja,fr) when prompted.
+The extension extracts strings and generates JSON files in resources/lang (e.g., en.json, JA.json, FR.json).
 
-### 1.0.0
 
-Initial release of ...
+Check Output:
 
-### 1.0.1
+Verify translation files in resources/lang.
+Existing translations are preserved, and only new strings are translated.
 
-Fixed issue #.
 
-### 1.1.0
 
-Added features X, Y, and Z.
+Requirements
 
----
+VS Code: Version 1.104.0 or higher.
+Laravel Project: Must contain Blade files with translatable strings using __() function.
+API Key: Valid API key for Google Translate or DeepL.
+Node.js: Required for compiling the extension.
 
-## Following extension guidelines
+Configuration
+The extension supports the following settings:
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+eiiLaravelTranslator.apiProvider (string): Translation API provider (google or deepl).
+eiiLaravelTranslator.apiKey (string): Your API key for the selected provider.
+eiiLaravelTranslator.delayMs (number): Delay in milliseconds between API requests to avoid rate limits (default: 200).
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+Known Issues
 
-## Working with Markdown
+Rate Limits: Free API tiers (e.g., DeepL free) may return "Too Many Requests" errors for large projects. Increase delayMs or use a paid API plan.
+Large Projects: Scanning many Blade files may cause a slight delay in the QuickPick dropdown. The extension excludes vendor and node_modules to optimize performance.
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+Contributing
+Contributions are welcome! To contribute:
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+Fork the repository.
+Create a feature branch (git checkout -b feature/your-feature).
+Commit changes (git commit -m 'Add your feature').
+Push to the branch (git push origin feature/your-feature).
+Open a pull request.
 
-## For more information
+License
+This extension is licensed under the MIT License.
+Support
+For issues, feature requests, or questions, please open an issue on the GitHub repository or contact the Eii support team.
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+Developed by Eii Tech Solutions. Simplify your Laravel localization today!
+https://eiitechsolutions.com
