@@ -4,7 +4,7 @@
   "description": "Eii Laravel Translator automatically extracts locale strings from Blade files, generates locale JSON files, and translates them into multiple languages.",
   "version": "1.0.0",
   "license": "MIT",
-  "publisher": "Eii",
+  "publisher": "a151c4df-8a71-6c66-93b3-5696dd3fd201",
   "type": "module",
   "engines": {
     "vscode": "^1.104.0"
