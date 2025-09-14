@@ -94,4 +94,5 @@ For issues, feature requests, or questions, please [open an issue](https://githu
 
 ---
 
-*Developed by Eii. Simplify your Laravel localization today!*
+*Developed by Eii Tech Solutions, Japan. Simplify your Laravel localization today!*
+https://eiitechsolutions.com
