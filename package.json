@@ -1,0 +1,69 @@
+{
+  "name": "eii-laravel-translator",
+  "displayName": "Eii Laravel Translator",
+  "description": "Eii Laravel Translator automatically extracts locale strings from Blade files, generates locale JSON files, and translates them into multiple languages.",
+  "version": "0.0.1",
+  "publisher": "Eii",
+  "type": "module",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "eii-laravel-translator.extract",
+        "title": "Eii Translator: Extract and Translate Blade Files"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Eii Laravel Translator",
+      "properties": {
+        "eiiLaravelTranslator.apiProvider": {
+          "type": "string",
+          "enum": [
+            "google",
+            "deepl"
+          ],
+          "default": "deepl",
+          "description": "Translation API provider"
+        },
+        "eiiLaravelTranslator.apiKey": {
+          "type": "string",
+          "description": "Your translation API key"
+        },
+        "eiiLaravelTranslator.delayMs": {
+          "type": "number",
+          "default": 200,
+          "description": "Delay in milliseconds between API requests"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.104.0",
+    "@typescript-eslint/eslint-plugin": "^8.42.0",
+    "@typescript-eslint/parser": "^8.42.0",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.34.0"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "glob": "^11.0.0"
+  }
+}
