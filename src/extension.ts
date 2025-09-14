@@ -14,6 +14,11 @@ interface DeepLResponse {
   translations: { text: string }[];
 }
 
+interface FileQuickPickItem extends vscode.QuickPickItem {
+  path: string;
+  isFolder: boolean;
+}
+
 export function activate(context: vscode.ExtensionContext) {
   let disposable = vscode.commands.registerCommand(
     "eii-laravel-translator.extract",
@@ -36,18 +41,72 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      // Prompt for file or folder path
-      const fileInput = await vscode.window.showInputBox({
-        prompt:
-          'Enter Blade file path (e.g., resources/views/welcome.blade.php), folder with "*" (e.g., resources/views/mail/*), or "*" for all files',
-        placeHolder: "e.g., * or resources/views/*",
+      // Collect all Blade files and folders
+      const bladeFiles = glob.sync("**/*.blade.php", { cwd: workspaceRoot });
+      const allFolders = [
+        ...new Set(bladeFiles.map((file) => path.dirname(file))),
+      ].sort();
+      const allItems: FileQuickPickItem[] = [
+        {
+          label: "*",
+          detail: "Process all Blade files",
+          path: "*",
+          isFolder: false,
+        },
+        ...bladeFiles.map((file) => ({
+          label: file,
+          detail: "Blade file",
+          path: file,
+          isFolder: false,
+        })),
+        ...allFolders.map((folder) => ({
+          label: `${folder}/*`,
+          detail: "All Blade files in folder",
+          path: `${folder}/*`,
+          isFolder: true,
+        })),
+      ];
+
+      // Prompt for file or folder path with QuickPick
+      const quickPick = vscode.window.createQuickPick<FileQuickPickItem>();
+      quickPick.items = allItems;
+      quickPick.placeholder =
+        'Select a Blade file, folder with "/*", or "*" for all files';
+      quickPick.matchOnDescription = true;
+      quickPick.matchOnDetail = true;
+
+      // Filter items as user types
+      quickPick.onDidChangeValue(() => {
+        const input = quickPick.value.toLowerCase();
+        if (!input) {
+          quickPick.items = allItems;
+        } else {
+          quickPick.items = allItems.filter((item) =>
+            item.label.toLowerCase().includes(input)
+          );
+        }
       });
 
+      const selectedItem = await new Promise<FileQuickPickItem | undefined>(
+        (resolve) => {
+          quickPick.onDidAccept(() => {
+            resolve(quickPick.selectedItems[0]);
+            quickPick.hide();
+          });
+          quickPick.onDidHide(() => resolve(undefined));
+          quickPick.show();
+        }
+      );
+
+      if (!selectedItem) {
+        return; // Cancelled
+      }
+
       let files: string[] = [];
-      if (fileInput === "*") {
-        files = glob.sync("**/*.blade.php", { cwd: workspaceRoot });
-      } else if (fileInput?.endsWith("/*")) {
-        const dir = fileInput.slice(0, -2);
+      if (selectedItem.path === "*") {
+        files = bladeFiles;
+      } else if (selectedItem.isFolder) {
+        const dir = selectedItem.path.slice(0, -2); // Remove '/*'
         const dirPath = path.join(workspaceRoot, dir);
         if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
           files = glob
@@ -57,16 +116,14 @@ export function activate(context: vscode.ExtensionContext) {
           vscode.window.showErrorMessage("Invalid folder path.");
           return;
         }
-      } else if (fileInput) {
-        const filePath = path.join(workspaceRoot, fileInput);
+      } else {
+        const filePath = path.join(workspaceRoot, selectedItem.path);
         if (fs.existsSync(filePath) && filePath.endsWith(".blade.php")) {
-          files = [fileInput];
+          files = [selectedItem.path];
         } else {
           vscode.window.showErrorMessage("Invalid Blade file path.");
           return;
         }
-      } else {
-        return; // Cancelled
       }
 
       // Prompt for languages
@@ -75,7 +132,7 @@ export function activate(context: vscode.ExtensionContext) {
         placeHolder: "ja,fr",
       });
       const targetLanguages = langInput
-        ? langInput.split(",").map((l) => l.trim())
+        ? langInput.split(",").map((l) => l.trim().toUpperCase())
         : [];
 
       let newTranslations: Record<string, string> = {};
@@ -125,14 +182,13 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       if (totalSteps === 0) {
-        // Still need to write the files if languages exist, but no new translations
         for (const lang of targetLanguages) {
           const langFilePath = path.join(langDir, `${lang}.json`);
           let existingLang: Record<string, string> = {};
           if (fs.existsSync(langFilePath)) {
             existingLang = JSON.parse(fs.readFileSync(langFilePath, "utf8"));
           }
-          const translated = { ...existingLang, ...newTranslations }; // Fallback to en if no translate
+          const translated = { ...existingLang, ...newTranslations };
           fs.writeFileSync(langFilePath, JSON.stringify(translated, null, 2));
         }
         vscode.window.showInformationMessage("✅ No new strings to translate.");
@@ -168,28 +224,24 @@ export function activate(context: vscode.ExtensionContext) {
                     key,
                     lang
                   );
-                  // Delay to avoid rate limits
                   await new Promise((resolve) => setTimeout(resolve, delayMs));
                 } catch (error) {
                   vscode.window.showErrorMessage(
                     `Translation failed for ${lang}: ${error}`
                   );
-                  translated[key] = key; // Fallback to original text
+                  translated[key] = key;
                 }
                 currentStep++;
                 progress.report({ increment: stepIncrement });
               }
             }
 
-            // Write updated lang.json
             fs.writeFileSync(langFilePath, JSON.stringify(translated, null, 2));
           }
         }
       );
 
-      vscode.window.showInformationMessage(
-        "✅ Extracted and translated strings!"
-      );
+      vscode.window.showInformationMessage("Extracted and translated strings!");
     }
   );
 
