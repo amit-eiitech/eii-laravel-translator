@@ -165,9 +165,9 @@ export function activate(context: vscode.ExtensionContext) {
           path.join(workspaceRoot, file.replace(/\\/g, "/")),
           "utf8"
         );
-        const matches = content.match(/__\(['"`](.*?)['"`]\)/g) || [];
+        const matches = content.match(/(?:__|@lang)\(['"`](.*?)['"`]\)/g) || [];
         matches.forEach((m) => {
-          const key = m.replace(/__\(['"`](.*?)['"`]\)/, "$1");
+          const key = m.replace(/(?:__|@lang)\(['"`](.*?)['"`]\)/, "$1");
           newTranslations[key] = key;
         });
       }
