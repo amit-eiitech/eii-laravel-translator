@@ -2,8 +2,6 @@
 
 Stop manual locale file management! **Eii Laravel Translator** is a Visual Studio Code extension that **automatically extracts** translatable strings from your Blade files, **generates clean JSON locale files**, and provides instant, **multi-language translation** using Google Translate or DeepL APIs.
 
----
-
 ## ✨ Features and Benefits
 
 This extension streamlines your multilingual Laravel development by offering intelligent and automated localization features:
@@ -17,7 +15,6 @@ This extension streamlines your multilingual Laravel development by offering int
 * **Robust API Rate Limit Handling**: Configure request delays (`delayMs`) and retry logic to automatically respect API limits, ensuring reliable batch translations for large projects.
 * **Progress Reporting**: Displays a visual progress bar during the extraction and translation process, so you're never left guessing.
 
----
 
 ## 🚀 Installation
 
@@ -26,7 +23,6 @@ This extension streamlines your multilingual Laravel development by offering int
 3.  Search for **Eii Laravel Translator**.
 4.  Click **Install**.
 
----
 
 ## ⚙️ Usage Guide
 
@@ -61,7 +57,7 @@ The extension will now:
 
 Watch this short video/GIF to see the entire process in action:
 
-[GIF of Eii Laravel Translator workflow (3-5 seconds)]
+![GIF of Eii Laravel Translator workflow (3-5 seconds)](https://raw.githubusercontent.com/amit-eiitech/eii-laravel-translator/main/assets/laravel-translator-vs-code-extension-demo.gif)
 
 ---
 
@@ -86,23 +82,20 @@ Watch this short video/GIF to see the entire process in action:
 * **Rate Limits**: Free API tiers (e.g., DeepL free) may return "Too Many Requests" errors for large projects. Increase `delayMs` or consider a paid API plan for consistent performance.
 * **Performance**: To optimize performance, the extension automatically excludes files in the `vendor` and `node_modules` directories.
 
----
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please refer to the guidelines in the repository for submitting issues or pull requests.
 
----
 
 ## 📝 License
 
 This extension is licensed under the [MIT License](LICENSE).
 
----
 
 ## 📞 Support and Contact
 
-For issues, feature requests, or questions, please [open an issue](https://github.com/eii/laravel-translator/issues) on the GitHub repository.
+For issues, feature requests, or questions, please [open an issue](https://github.com/amit-eiitech/eii-laravel-translator/issues) on the GitHub repository.
 
 Eii Laravel Translator is a product of **Eii Tech Solutions, Japan**. For support or enterprise inquiries, visit our website: [https://eiitechsolutions.com](https://eiitechsolutions.com).
 
