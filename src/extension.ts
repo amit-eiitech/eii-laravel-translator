@@ -51,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
         ? glob
             .sync("**/*.blade.php", {
               cwd: defaultDirPath,
-              ignore: ["vendor/**", "node_modules/**"],
+              ignore: [ "node_modules/**"],
             })
             .map((f) => path.join(defaultDir, f).replace(/\//g, separator))
         : [];
