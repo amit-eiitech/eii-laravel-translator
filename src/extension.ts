@@ -51,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
         ? glob
             .sync("**/*.blade.php", {
               cwd: defaultDirPath,
-              ignore: [ "node_modules/**"],
+              ignore: ["node_modules/**"],
             })
             .map((f) => path.join(defaultDir, f).replace(/\//g, separator))
         : [];
@@ -155,7 +155,7 @@ export function activate(context: vscode.ExtensionContext) {
         placeHolder: "ja,fr",
       });
       const targetLanguages = langInput
-        ? langInput.split(",").map((l) => l.trim().toUpperCase())
+        ? langInput.split(",").map((l) => l.trim().toLowerCase())
         : [];
 
       let newTranslations: Record<string, string> = {};
