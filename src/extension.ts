@@ -33,10 +33,11 @@ export function activate(context: vscode.ExtensionContext) {
       const apiProvider = config.get<string>("apiProvider");
       const apiKey = config.get<string>("apiKey");
       const delayMs = config.get<number>("delayMs") || 200;
+      const sourceLang = config.get<string>("sourceLanguage") || "auto";
 
       if (!apiKey) {
         vscode.window.showErrorMessage(
-          "No API key found. Set it in VS Code settings."
+          "No API key found. Set it in VS Code settings.",
         );
         return;
       }
@@ -96,7 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
           quickPick.items = allItems.filter(
             (item) =>
               item.label.toLowerCase().replace(/\\/g, "/").includes(input) ||
-              item.label === "*"
+              item.label === "*",
           );
         }
       });
@@ -109,7 +110,7 @@ export function activate(context: vscode.ExtensionContext) {
           });
           quickPick.onDidHide(() => resolve(undefined));
           quickPick.show();
-        }
+        },
       );
 
       if (!selectedItem) {
@@ -139,7 +140,7 @@ export function activate(context: vscode.ExtensionContext) {
       } else {
         const filePath = path.join(
           workspaceRoot,
-          selectedItem.path.replace(/\\/g, "/")
+          selectedItem.path.replace(/\\/g, "/"),
         );
         if (fs.existsSync(filePath) && filePath.endsWith(".blade.php")) {
           files = [selectedItem.path.replace(/\\/g, "/")];
@@ -163,7 +164,7 @@ export function activate(context: vscode.ExtensionContext) {
       for (const file of files) {
         const content = fs.readFileSync(
           path.join(workspaceRoot, file.replace(/\\/g, "/")),
-          "utf8"
+          "utf8",
         );
         const matches = content.match(/(?:__|@lang)\(['"`](.*?)['"`]\)/g) || [];
         matches.forEach((m) => {
@@ -202,7 +203,7 @@ export function activate(context: vscode.ExtensionContext) {
           existingLang = JSON.parse(fs.readFileSync(langFilePath, "utf8"));
         }
         const keysToTranslate = Object.keys(newTranslations).filter(
-          (key) => !(key in existingLang)
+          (key) => !(key in existingLang),
         );
         totalSteps += keysToTranslate.length;
       }
@@ -248,12 +249,13 @@ export function activate(context: vscode.ExtensionContext) {
                     apiProvider!,
                     apiKey!,
                     key,
-                    lang
+                    lang,
+                    sourceLang,
                   );
                   await new Promise((resolve) => setTimeout(resolve, delayMs));
                 } catch (error) {
                   vscode.window.showErrorMessage(
-                    `Translation failed for ${lang}: ${error}`
+                    `Translation failed for ${lang}: ${error}`,
                   );
                   translated[key] = key;
                 }
@@ -264,13 +266,13 @@ export function activate(context: vscode.ExtensionContext) {
 
             fs.writeFileSync(langFilePath, JSON.stringify(translated, null, 2));
           }
-        }
+        },
       );
 
       vscode.window.showInformationMessage(
-        "✅ Extracted and translated strings!"
+        "✅ Extracted and translated strings!",
       );
-    }
+    },
   );
 
   context.subscriptions.push(disposable);
@@ -281,8 +283,9 @@ async function translateWithRetry(
   apiKey: string,
   text: string,
   target: string,
+  sourceLang: string,
   retries: number = 3,
-  delayMs: number = 1000
+  delayMs: number = 1000,
 ): Promise<string> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -293,6 +296,7 @@ async function translateWithRetry(
           body: JSON.stringify({
             q: text,
             target: target,
+            source: sourceLang,
             format: "text",
           }),
           headers: { "Content-Type": "application/json" },
@@ -315,6 +319,7 @@ async function translateWithRetry(
             auth_key: apiKey,
             text: text,
             target_lang: target.toUpperCase(),
+            source_lang: sourceLang.toUpperCase(),
           }),
         });
 
@@ -334,7 +339,7 @@ async function translateWithRetry(
         continue;
       }
       throw new Error(
-        `Translation error for ${text} to ${target}: ${error.message}`
+        `Translation error for ${text} to ${target}: ${error.message}`,
       );
     }
   }
