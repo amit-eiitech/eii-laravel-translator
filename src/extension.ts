@@ -19,6 +19,8 @@ interface FileQuickPickItem extends vscode.QuickPickItem {
   isFolder: boolean;
 }
 
+type LocaleTranslations = Record<string, string>;
+
 export function activate(context: vscode.ExtensionContext) {
   let disposable = vscode.commands.registerCommand(
     "eii-laravel-translator.extract",
@@ -31,13 +33,13 @@ export function activate(context: vscode.ExtensionContext) {
 
       const config = vscode.workspace.getConfiguration("eiiLaravelTranslator");
       const apiProvider = config.get<string>("apiProvider");
-      const apiKey = config.get<string>("apiKey");
       const delayMs = config.get<number>("delayMs") || 200;
-      const sourceLang = config.get<string>("sourceLanguage") || "auto";
+      const batchSize = Math.max(1, config.get<number>("batchSize") || 20);
+      const apiKey = getApiKeyForProvider(config, apiProvider);
 
       if (!apiKey) {
         vscode.window.showErrorMessage(
-          "No API key found. Set it in VS Code settings.",
+          `No ${apiProvider} API key found. Set it in VS Code settings.`,
         );
         return;
       }
@@ -156,24 +158,18 @@ export function activate(context: vscode.ExtensionContext) {
         placeHolder: "ja,fr",
       });
       const targetLanguages = langInput
-        ? langInput.split(",").map((l) => l.trim().toLowerCase())
+        ? langInput
+            .split(",")
+            .map((l) => l.trim().toLowerCase())
+            .filter((l) => l.length > 0)
         : [];
 
-      let newTranslations: Record<string, string> = {};
+      const extractedTranslations = extractTranslationsFromBladeFiles(
+        workspaceRoot,
+        files,
+      );
 
-      for (const file of files) {
-        const content = fs.readFileSync(
-          path.join(workspaceRoot, file.replace(/\\/g, "/")),
-          "utf8",
-        );
-        const matches = content.match(/(?:__|@lang)\(['"`](.*?)['"`]\)/g) || [];
-        matches.forEach((m) => {
-          const key = m.replace(/(?:__|@lang)\(['"`](.*?)['"`]\)/, "$1");
-          newTranslations[key] = key;
-        });
-      }
-
-      if (Object.keys(newTranslations).length === 0) {
+      if (Object.keys(extractedTranslations).length === 0) {
         vscode.window.showWarningMessage("No translatable strings found.");
         return;
       }
@@ -183,47 +179,39 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Load existing en.json
       const enFilePath = path.join(langDir, "en.json");
-      let existingEn: Record<string, string> = {};
-      if (fs.existsSync(enFilePath)) {
-        existingEn = JSON.parse(fs.readFileSync(enFilePath, "utf8"));
-      }
+      const existingEn = readLocaleFile(enFilePath);
 
-      // Merge new translations into existing en
-      const mergedEn = { ...existingEn, ...newTranslations };
+      // Append extracted source strings without overwriting manual source edits.
+      const mergedEn = mergeMissingTranslations(
+        existingEn,
+        extractedTranslations,
+      );
 
       // Write updated en.json
-      fs.writeFileSync(enFilePath, JSON.stringify(mergedEn, null, 2));
+      writeLocaleFile(enFilePath, mergedEn);
 
-      // Calculate total steps for progress (only new translations per language)
+      // Calculate total steps for progress (only missing/untranslated strings per language)
+      const pendingTranslations = new Map<string, string[]>();
       let totalSteps = 0;
       for (const lang of targetLanguages) {
         const langFilePath = path.join(langDir, `${lang}.json`);
-        let existingLang: Record<string, string> = {};
-        if (fs.existsSync(langFilePath)) {
-          existingLang = JSON.parse(fs.readFileSync(langFilePath, "utf8"));
-        }
-        const keysToTranslate = Object.keys(newTranslations).filter(
-          (key) => !(key in existingLang),
+        const existingLang = readLocaleFile(langFilePath);
+        const keysToTranslate = getKeysToTranslate(
+          existingLang,
+          extractedTranslations,
         );
+        pendingTranslations.set(lang, keysToTranslate);
         totalSteps += keysToTranslate.length;
       }
 
       if (totalSteps === 0) {
-        for (const lang of targetLanguages) {
-          const langFilePath = path.join(langDir, `${lang}.json`);
-          let existingLang: Record<string, string> = {};
-          if (fs.existsSync(langFilePath)) {
-            existingLang = JSON.parse(fs.readFileSync(langFilePath, "utf8"));
-          }
-          const translated = { ...existingLang, ...newTranslations };
-          fs.writeFileSync(langFilePath, JSON.stringify(translated, null, 2));
-        }
         vscode.window.showInformationMessage("✅ No new strings to translate.");
         return;
       }
 
       const stepIncrement = 100 / totalSteps;
       let currentStep = 0;
+      let failedTranslations = 0;
 
       // Process translations with progress bar
       await vscode.window.withProgress(
@@ -235,58 +223,168 @@ export function activate(context: vscode.ExtensionContext) {
         async (progress) => {
           for (const lang of targetLanguages) {
             const langFilePath = path.join(langDir, `${lang}.json`);
-            let existingLang: Record<string, string> = {};
-            if (fs.existsSync(langFilePath)) {
-              existingLang = JSON.parse(fs.readFileSync(langFilePath, "utf8"));
-            }
+            const existingLang = readLocaleFile(langFilePath);
+            const translated: LocaleTranslations = { ...existingLang };
+            const keysToTranslate = pendingTranslations.get(lang) || [];
+            let hasSuccessfulTranslations = false;
 
-            let translated: Record<string, string> = { ...existingLang };
-
-            for (const [key] of Object.entries(newTranslations)) {
-              if (!(key in existingLang)) {
-                try {
-                  translated[key] = await translateWithRetry(
-                    apiProvider!,
-                    apiKey!,
-                    key,
-                    lang,
-                    sourceLang,
-                  );
-                  await new Promise((resolve) => setTimeout(resolve, delayMs));
-                } catch (error) {
-                  vscode.window.showErrorMessage(
-                    `Translation failed for ${lang}: ${error}`,
-                  );
-                  translated[key] = key;
-                }
-                currentStep++;
-                progress.report({ increment: stepIncrement });
+            for (const keyBatch of chunkStrings(keysToTranslate, batchSize)) {
+              try {
+                const translatedBatch = await translateBatchWithRetry(
+                  apiProvider!,
+                  apiKey!,
+                  keyBatch,
+                  lang,
+                );
+                keyBatch.forEach((key, index) => {
+                  translated[key] = translatedBatch[index];
+                });
+                hasSuccessfulTranslations = true;
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+              } catch (error) {
+                failedTranslations += keyBatch.length;
+                console.error(
+                  `Translation failed for ${keyBatch.length} string(s) to ${lang}`,
+                  error,
+                );
               }
+
+              currentStep += keyBatch.length;
+              progress.report({
+                increment: stepIncrement * keyBatch.length,
+              });
             }
 
-            fs.writeFileSync(langFilePath, JSON.stringify(translated, null, 2));
+            if (hasSuccessfulTranslations) {
+              writeLocaleFile(langFilePath, translated);
+            }
           }
         },
       );
 
-      vscode.window.showInformationMessage(
-        "✅ Extracted and translated strings!",
-      );
+      if (failedTranslations > 0) {
+        vscode.window.showWarningMessage(
+          `Extracted strings, but ${failedTranslations} translation(s) failed. Existing locale values were preserved.`,
+        );
+      } else {
+        vscode.window.showInformationMessage(
+          "✅ Extracted and translated strings!",
+        );
+      }
     },
   );
 
   context.subscriptions.push(disposable);
 }
 
-async function translateWithRetry(
+function extractTranslationsFromBladeFiles(
+  workspaceRoot: string,
+  files: string[],
+): LocaleTranslations {
+  const translations: LocaleTranslations = {};
+
+  for (const file of files) {
+    const content = fs.readFileSync(
+      path.join(workspaceRoot, file.replace(/\\/g, "/")),
+      "utf8",
+    );
+    const matches = content.match(/(?:__|@lang)\(['"`](.*?)['"`]\)/g) || [];
+    matches.forEach((m) => {
+      const key = m.replace(/(?:__|@lang)\(['"`](.*?)['"`]\)/, "$1");
+      translations[key] = key;
+    });
+  }
+
+  return translations;
+}
+
+function readLocaleFile(filePath: string): LocaleTranslations {
+  if (!fs.existsSync(filePath)) {
+    return {};
+  }
+
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function writeLocaleFile(
+  filePath: string,
+  translations: LocaleTranslations,
+): void {
+  fs.writeFileSync(filePath, JSON.stringify(translations, null, 2));
+}
+
+function mergeMissingTranslations(
+  existingTranslations: LocaleTranslations,
+  extractedTranslations: LocaleTranslations,
+): LocaleTranslations {
+  const mergedTranslations = { ...existingTranslations };
+
+  for (const [key, value] of Object.entries(extractedTranslations)) {
+    if (!(key in mergedTranslations)) {
+      mergedTranslations[key] = value;
+    }
+  }
+
+  return mergedTranslations;
+}
+
+function getKeysToTranslate(
+  existingTranslations: LocaleTranslations,
+  extractedTranslations: LocaleTranslations,
+): string[] {
+  return Object.keys(extractedTranslations).filter((key) =>
+    isMissingOrUntranslated(existingTranslations, key),
+  );
+}
+
+function isMissingOrUntranslated(
+  translations: LocaleTranslations,
+  key: string,
+): boolean {
+  const value = translations[key];
+
+  return value === undefined || value.trim() === "" || value === key;
+}
+
+function getApiKeyForProvider(
+  config: vscode.WorkspaceConfiguration,
+  provider: string | undefined,
+): string {
+  if (provider === "google") {
+    return config.get<string>("googleApiKey") || config.get<string>("apiKey") || "";
+  }
+
+  if (provider === "deepl") {
+    return config.get<string>("deeplApiKey") || config.get<string>("apiKey") || "";
+  }
+
+  return "";
+}
+
+function chunkStrings(items: string[], batchSize: number): string[][] {
+  const batches: string[][] = [];
+
+  for (let index = 0; index < items.length; index += batchSize) {
+    batches.push(items.slice(index, index + batchSize));
+  }
+
+  return batches;
+}
+
+function getDeepLTranslateUrl(apiKey: string): string {
+  const host = apiKey.endsWith(":fx") ? "api-free.deepl.com" : "api.deepl.com";
+
+  return `https://${host}/v2/translate`;
+}
+
+async function translateBatchWithRetry(
   provider: string,
   apiKey: string,
-  text: string,
+  texts: string[],
   target: string,
-  sourceLang: string,
   retries: number = 3,
   delayMs: number = 1000,
-): Promise<string> {
+): Promise<string[]> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       if (provider === "google") {
@@ -294,9 +392,8 @@ async function translateWithRetry(
         const res = await fetch(url, {
           method: "POST",
           body: JSON.stringify({
-            q: text,
+            q: texts,
             target: target,
-            source: sourceLang,
             format: "text",
           }),
           headers: { "Content-Type": "application/json" },
@@ -310,28 +407,40 @@ async function translateWithRetry(
         }
 
         const data = (await res.json()) as GoogleTranslateResponse;
-        return data.data.translations[0].translatedText;
+        const translatedTexts = data.data.translations.map(
+          (translation) => translation.translatedText,
+        );
+        ensureBatchSizeMatches(texts, translatedTexts, provider);
+        return translatedTexts;
       } else if (provider === "deepl") {
-        const url = `https://api-free.deepl.com/v2/translate`;
+        const url = getDeepLTranslateUrl(apiKey);
         const res = await fetch(url, {
           method: "POST",
-          body: new URLSearchParams({
-            auth_key: apiKey,
-            text: text,
+          body: JSON.stringify({
+            text: texts,
             target_lang: target.toUpperCase(),
-            source_lang: sourceLang.toUpperCase(),
           }),
+          headers: {
+            Authorization: `DeepL-Auth-Key ${apiKey}`,
+            "Content-Type": "application/json",
+          },
         });
 
         if (!res.ok) {
           if (res.status === 429) {
             throw new Error("Too many requests");
           }
-          throw new Error(`DeepL API error: ${res.statusText}`);
+          throw new Error(
+            `DeepL API error: ${res.status} ${res.statusText} - ${await res.text()}`,
+          );
         }
 
         const data = (await res.json()) as DeepLResponse;
-        return data.translations[0].text;
+        const translatedTexts = data.translations.map(
+          (translation) => translation.text,
+        );
+        ensureBatchSizeMatches(texts, translatedTexts, provider);
+        return translatedTexts;
       }
     } catch (error: any) {
       if (error.message.includes("Too many requests") && attempt < retries) {
@@ -339,12 +448,24 @@ async function translateWithRetry(
         continue;
       }
       throw new Error(
-        `Translation error for ${text} to ${target}: ${error.message}`,
+        `Translation error for ${texts.length} string(s) to ${target}: ${error.message}`,
       );
     }
   }
 
-  return text;
+  return texts;
+}
+
+function ensureBatchSizeMatches(
+  inputTexts: string[],
+  translatedTexts: string[],
+  provider: string,
+): void {
+  if (inputTexts.length !== translatedTexts.length) {
+    throw new Error(
+      `${provider} returned ${translatedTexts.length} translation(s) for ${inputTexts.length} input string(s)`,
+    );
+  }
 }
 
 export function deactivate() {}
