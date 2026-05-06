@@ -4,6 +4,8 @@ All notable changes to the "laravel-locale-generator" extension will be document
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [Unreleased]
+## [1.2.2]
 
-- Initial release
+- Added separate Google Translate v2 and DeepL API key settings with provider-based selection.
+- Added configurable batch translation requests to reduce API usage.
+- Preserved existing locale values when translation batches fail.
